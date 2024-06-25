@@ -1,0 +1,58 @@
+# .goreleaser.yml
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    # you may remove this if you don't need go generate
+    - go generate ./...
+    - ./set-version.sh
+
+builds:
+  - goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - "386"
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    ignore:
+      - goarch: "386"
+        goos: darwin
+archives:
+  - format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - name: gitfab
+
+    repository:
+      owner: JamesWoolfenden
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+
+    commit_author:
+      name: "GitHub Action"
+      email: action@github.com
+
+    homepage: "https://github.com/JamesWoolfenden/gitfab#readme"
+
+    description: "Opens a git repo in a browser"
+
+    install: |
+      bin.install "gitfab"
+
+    test: |
+      system "#{bin}/gitfab", "--help"

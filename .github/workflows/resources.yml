@@ -1,0 +1,68 @@
+name: 'Resources'
+on:
+  schedule:
+    - cron: '0 18 * * 5'
+  workflow_dispatch:
+permissions: read-all
+
+jobs:
+    build:
+      permissions: write-all
+      runs-on:  ubuntu-latest
+      steps:
+        - name: Install Go
+          uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+          with:
+            go-version: ${{ matrix.go-version }}
+
+        ## checks out our code locally, so we can work with the files
+        - name: Checkout code
+          uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+        ## runs go test ./...
+        - name: Build
+          run: go build -o ${{ github.workspace }} ./...
+
+
+        - name: Checkout AWS
+          uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+          with:
+            repository: hashicorp/terraform-provider-aws
+            path: aws
+
+        - name: Parse Azurerm
+          run: ${{ github.workspace }}/pike parse -d ${{ github.workspace }}/aws -name aws
+
+        - name: Checkout AZURERM
+          uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+          with:
+            repository: hashicorp/terraform-provider-azurerm
+            path: azurerm
+
+        - name: Parse Azurerm
+          run: ${{ github.workspace }}/pike parse -d ${{ github.workspace }}/azurerm -name azurerm
+
+        - name: Generate Google
+          uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+          with:
+            repository: hashicorp/terraform-provider-google
+            path: google
+
+        - name: Parse Google
+          run: ${{ github.workspace }}/pike parse -d ${{ github.workspace }}/google -name google
+
+        - name: copy
+          run: cp ${{ github.workspace }}/*.json ${{ github.workspace }}/src/parse/
+        - name: setup git config
+          run: |
+            # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
+            git config user.name "GitHub Actions Bot"
+            git config user.email "jim.wolf@duck.com"
+
+        - name: commit
+          run: |
+            # Stage the file, commit and push
+            mv *-members.json src/parse
+            git add src/parse/*-members.json --ignore-errors
+            git commit -m "updated resources" --allow-empty
+            git push origin master
