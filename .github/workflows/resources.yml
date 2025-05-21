@@ -65,4 +65,4 @@ jobs:
             mv *-members.json src/parse
             git add src/parse/*-members.json --ignore-errors
             git commit -m "updated resources" --allow-empty
-            git push origin master
+            git push origin main
