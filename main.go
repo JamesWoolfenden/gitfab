@@ -35,7 +35,7 @@ func main() {
 
 	if len(config.Remotes) >= 1 {
 		if origin, ok := config.Remotes["origin"]; ok {
-			openbrowser(origin.URLs[0])
+			openBrowser(origin.URLs[0])
 		} else {
 			log.Fatalf("No remotes found")
 		}
@@ -46,7 +46,7 @@ func main() {
 
 }
 
-func openbrowser(origin string) {
+func openBrowser(origin string) {
 	var err error
 
 	url := translateGit2Url(origin)
