@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-git/go-git/v5"
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/go-git/go-git/v5"
 )
 
 func main() {

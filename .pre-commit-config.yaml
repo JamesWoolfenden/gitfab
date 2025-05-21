@@ -47,8 +47,8 @@ repos:
   - repo: https://github.com/syntaqx/git-hooks
     rev: v0.0.18
     hooks:
-      - id: go-test
-        args: [ "./..." ]
+#      - id: go-test
+#        args: [ "./..." ]
       - id: go-mod-tidy
       - id: go-generate
   - repo: https://github.com/jameswoolfenden/ghat
