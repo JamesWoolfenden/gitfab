@@ -1,50 +1,79 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 )
 
-func main() {
-	// Open the Git repository
-	//
-	path, err := os.Getwd()
+const version = "0.1.0"
 
-	if err != nil {
-		fmt.Println(err)
-		return
+func main() {
+	// Define CLI flags
+	var (
+		showVersion = flag.Bool("version", false, "Show version information")
+		showHelp    = flag.Bool("help", false, "Show help information")
+		remoteName  = flag.String("remote", "origin", "Name of the remote to open")
+	)
+
+	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("gitfab version %s\n", version)
+		os.Exit(0)
 	}
 
-	repo, err := git.PlainOpen(path)
+	// Handle help flag
+	if *showHelp {
+		fmt.Println("gitfab - Opens a git repository in a browser")
+		fmt.Println("\nUsage:")
+		fmt.Println("  gitfab [flags]")
+		fmt.Println("\nFlags:")
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	// Find the Git repository starting from current directory
+	path, err := os.Getwd()
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	repoPath, err := findGitRepository(path)
+	if err != nil {
+		log.Fatalf("Failed to find git repository: %v", err)
+	}
+
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		log.Fatalf("Failed to open git repository: %v", err)
 	}
 
 	// Read the Git configuration
 	config, err := repo.Config()
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Failed to read git config: %v", err)
 	}
 
-	if len(config.Remotes) >= 1 {
-		if origin, ok := config.Remotes["origin"]; ok {
-			openBrowser(origin.URLs[0])
-		} else {
-			log.Fatalf("No remotes found")
-		}
-
-	} else {
-		log.Fatalf("No remotes found")
+	// Get the specified remote
+	remote, ok := config.Remotes[*remoteName]
+	if !ok {
+		log.Fatalf("Remote '%s' not found", *remoteName)
 	}
 
+	if len(remote.URLs) == 0 {
+		log.Fatalf("Remote '%s' has no URLs configured", *remoteName)
+	}
+
+	openBrowser(remote.URLs[0])
 }
 
 func openBrowser(origin string) {
@@ -69,11 +98,53 @@ func openBrowser(origin string) {
 
 }
 
+func findGitRepository(startPath string) (string, error) {
+	// Clean the path
+	currentPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Walk up the directory tree looking for .git
+	for {
+		gitPath := filepath.Join(currentPath, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			return currentPath, nil
+		}
+
+		// Get parent directory
+		parentPath := filepath.Dir(currentPath)
+
+		// If we've reached the root, stop
+		if parentPath == currentPath {
+			return "", fmt.Errorf("not a git repository (or any parent up to mount point)")
+		}
+
+		currentPath = parentPath
+	}
+}
+
 func translateGit2Url(url string) string {
-	if strings.Contains(url, "git@") {
-		url = strings.Replace(url, ":", "/", 1)
-		url = strings.Replace(url, "git@", "https://", 1)
-		url = strings.Replace(url, ".git", "", 1)
+	// Handle SSH URLs (git@github.com:user/repo.git)
+	if strings.HasPrefix(url, "git@") {
+		// Split on the first colon to separate host from path
+		parts := strings.SplitN(url, ":", 2)
+		if len(parts) == 2 {
+			// Replace git@ with https://
+			host := strings.Replace(parts[0], "git@", "https://", 1)
+			path := parts[1]
+			// Remove .git suffix if present
+			path = strings.TrimSuffix(path, ".git")
+			url = host + "/" + path
+		}
+	} else if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") {
+		// Already an HTTP(S) URL, just remove .git suffix if present
+		url = strings.TrimSuffix(url, ".git")
+	} else if strings.HasPrefix(url, "ssh://") {
+		// Handle ssh:// URLs (ssh://git@github.com/user/repo.git)
+		url = strings.Replace(url, "ssh://git@", "https://", 1)
+		url = strings.Replace(url, "ssh://", "https://", 1)
+		url = strings.TrimSuffix(url, ".git")
 	}
 
 	return url
