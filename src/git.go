@@ -33,6 +33,56 @@ func FindGitRepository(startPath string) (string, error) {
 	}
 }
 
+// PageType represents the type of page to open
+type PageType string
+
+const (
+	PageRepo     PageType = "repo"
+	PagePipeline PageType = "pipeline"
+)
+
+// Platform represents the Git hosting platform
+type Platform string
+
+const (
+	PlatformGitHub    Platform = "github"
+	PlatformGitLab    Platform = "gitlab"
+	PlatformBitbucket Platform = "bitbucket"
+	PlatformUnknown   Platform = "unknown"
+)
+
+// DetectPlatform detects the Git hosting platform from a URL
+func DetectPlatform(url string) Platform {
+	if strings.Contains(url, "github.com") {
+		return PlatformGitHub
+	}
+	if strings.Contains(url, "gitlab.com") || strings.Contains(url, "gitlab.") || strings.Contains(url, "code.pan.run") {
+		return PlatformGitLab
+	}
+	if strings.Contains(url, "bitbucket.org") || strings.Contains(url, "bitbucket.") {
+		return PlatformBitbucket
+	}
+	return PlatformUnknown
+}
+
+// GetPagePath returns the path suffix for a given platform and page type
+func GetPagePath(platform Platform, pageType PageType) string {
+	if pageType == PageRepo {
+		return ""
+	}
+
+	switch platform {
+	case PlatformGitHub:
+		return "/actions"
+	case PlatformGitLab:
+		return "/-/pipelines"
+	case PlatformBitbucket:
+		return "/pipelines"
+	default:
+		return ""
+	}
+}
+
 func TranslateGit2Url(url string) string {
 	// Handle SSH URLs (git@github.com:user/repo.git)
 	if strings.HasPrefix(url, "git@") {
@@ -57,4 +107,12 @@ func TranslateGit2Url(url string) string {
 	}
 
 	return url
+}
+
+// TranslateGit2UrlWithPage converts a Git URL to an HTTP(S) URL with optional page suffix
+func TranslateGit2UrlWithPage(url string, pageType PageType) string {
+	baseURL := TranslateGit2Url(url)
+	platform := DetectPlatform(url)
+	pagePath := GetPagePath(platform, pageType)
+	return baseURL + pagePath
 }

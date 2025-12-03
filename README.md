@@ -8,6 +8,7 @@ Opens a git repository in your default browser. Similar to `hub browse` but work
 - 📁 **Smart Repository Detection** - Finds the Git repository from any subdirectory
 - 🔄 **Multiple URL Formats** - Handles SSH, HTTPS, and ssh:// protocol URLs
 - 🎯 **Remote Selection** - Choose which remote to open (defaults to `origin`)
+- 🚀 **Pipeline Support** - Use `--target` flag to open Actions/Pipelines page (auto-detects platform)
 - ⚡ **Fast & Lightweight** - Single binary with no dependencies
 
 ## Installation
@@ -51,6 +52,7 @@ gitfab [flags]
 - `--help` - Show help information
 - `--version` - Show version information
 - `--remote <name>` - Specify which remote to open (default: "origin")
+- `--target` or `-t` - Open pipeline/actions page (auto-detects based on platform)
 
 ### Examples
 
@@ -77,6 +79,19 @@ gitfab --version
 ```bash
 gitfab --help
 ```
+
+**Open the pipelines/actions page:**
+
+```bash
+gitfab --target
+# or use the shorthand
+gitfab -t
+```
+
+This will open:
+- GitHub: `/actions` page
+- GitLab: `/-/pipelines` page
+- Bitbucket: `/pipelines` page
 
 ## How It Works
 

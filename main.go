@@ -17,9 +17,11 @@ const version = "0.1.0"
 func main() {
 	// Define CLI flags
 	var (
-		showVersion = flag.Bool("version", false, "Show version information")
-		showHelp    = flag.Bool("help", false, "Show help information")
-		remoteName  = flag.String("remote", "origin", "Name of the remote to open")
+		showVersion   = flag.Bool("version", false, "Show version information")
+		showHelp      = flag.Bool("help", false, "Show help information")
+		remoteName    = flag.String("remote", "origin", "Name of the remote to open")
+		openPipeline  = flag.Bool("target", false, "Open pipeline/actions page (auto-detects based on platform)")
+		openPipelineT = flag.Bool("t", false, "Shorthand for -target")
 	)
 
 	flag.Parse()
@@ -72,13 +74,23 @@ func main() {
 		log.Fatalf("Remote '%s' has no URLs configured", *remoteName)
 	}
 
-	openBrowser(remote.URLs[0])
+	remoteURL := remote.URLs[0]
+
+	// Determine which page to open
+	var page gitfab.PageType
+	if *openPipeline || *openPipelineT {
+		page = gitfab.PagePipeline
+	} else {
+		page = gitfab.PageRepo
+	}
+
+	openBrowser(remoteURL, page)
 }
 
-func openBrowser(origin string) {
+func openBrowser(origin string, page gitfab.PageType) {
 	var err error
 
-	url := gitfab.TranslateGit2Url(origin)
+	url := gitfab.TranslateGit2UrlWithPage(origin, page)
 
 	switch runtime.GOOS {
 	case "linux":

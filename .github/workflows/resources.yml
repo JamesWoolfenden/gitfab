@@ -11,13 +11,13 @@ jobs:
       runs-on:  ubuntu-latest
       steps:
         - name: Install Go
-          uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+          uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
           with:
             go-version: ${{ matrix.go-version }}
 
         ## checks out our code locally, so we can work with the files
         - name: Checkout code
-          uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+          uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
         ## runs go test ./...
         - name: Build
@@ -25,7 +25,7 @@ jobs:
 
 
         - name: Checkout AWS
-          uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+          uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
           with:
             repository: hashicorp/terraform-provider-aws
             path: aws
@@ -34,7 +34,7 @@ jobs:
           run: ${{ github.workspace }}/pike parse -d ${{ github.workspace }}/aws -name aws
 
         - name: Checkout AZURERM
-          uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+          uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
           with:
             repository: hashicorp/terraform-provider-azurerm
             path: azurerm
@@ -43,7 +43,7 @@ jobs:
           run: ${{ github.workspace }}/pike parse -d ${{ github.workspace }}/azurerm -name azurerm
 
         - name: Generate Google
-          uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+          uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
           with:
             repository: hashicorp/terraform-provider-google
             path: google
