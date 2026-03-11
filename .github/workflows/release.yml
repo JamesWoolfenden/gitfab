@@ -7,6 +7,8 @@ on:
 permissions: read-all
 jobs:
   goreleaser:
+    env:
+      GOTOOLCHAIN: auto
     permissions: write-all
     runs-on: ubuntu-latest
     steps:

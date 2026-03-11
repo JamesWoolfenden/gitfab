@@ -10,6 +10,7 @@ jobs:
   test:
     env:
       GITHUB_API: ${{ secrets.PAT }}
+      GOTOOLCHAIN: auto
     ## We want to define a strategy for our job
     strategy:
       ## this will contain a matrix of all the combinations
