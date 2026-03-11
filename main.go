@@ -5,9 +5,11 @@ import (
 	"fmt"
 	gitfab "gitfab/src"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 )
@@ -90,16 +92,42 @@ func main() {
 func openBrowser(origin string, page gitfab.PageType) {
 	var err error
 
-	url := gitfab.TranslateGit2UrlWithPage(origin, page)
+	urlStr := gitfab.TranslateGit2UrlWithPage(origin, page)
+
+	// SECURITY: Validate URL before passing to exec to prevent command injection
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		log.Fatalf("Invalid URL: %v", err)
+	}
+
+	// Whitelist allowed schemes
+	allowedSchemes := map[string]bool{
+		"http":  true,
+		"https": true,
+	}
+	if !allowedSchemes[parsedURL.Scheme] {
+		log.Fatalf("Unsupported URL scheme: %s (allowed: http, https)", parsedURL.Scheme)
+	}
+
+	// Additional validation - check for dangerous characters
+	dangerousChars := []string{"`", "$", "(", ")", ";", "&", "|", "<", ">", "\n", "\r"}
+	for _, char := range dangerousChars {
+		if strings.Contains(urlStr, char) {
+			log.Fatalf("URL contains dangerous characters: %s", char)
+		}
+	}
+
+	// Re-encode the URL for safety
+	safeURL := parsedURL.String()
 
 	switch runtime.GOOS {
 	case "linux":
-		err = exec.Command("xdg-open", url).Start()
+		err = exec.Command("xdg-open", safeURL).Start()
 	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", safeURL).Start()
 	case "darwin":
-		log.Printf("opening %s in browser", url)
-		err = exec.Command("open", url).Start()
+		log.Printf("opening %s in browser", safeURL)
+		err = exec.Command("open", safeURL).Start()
 	default:
 		err = fmt.Errorf("unsupported platform")
 	}

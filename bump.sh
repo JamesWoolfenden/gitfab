@@ -7,7 +7,7 @@ version=$(git describe --tags --abbrev=0)
 IFS='.' read -ra splitter <<< "$version"
 
 # Increment the build/patch number
-build=$((${splitter[2]} + 1))
+build=$((splitter[2] + 1))
 
 # Create the new version string
 newVersion="${splitter[0]}.${splitter[1]}.$build"

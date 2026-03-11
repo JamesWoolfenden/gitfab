@@ -2,6 +2,7 @@ package gitfab
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,36 +84,71 @@ func GetPagePath(platform Platform, pageType PageType) string {
 	}
 }
 
-func TranslateGit2Url(url string) string {
+func TranslateGit2Url(gitURL string) string {
 	// Handle SSH URLs (git@github.com:user/repo.git)
-	if strings.HasPrefix(url, "git@") {
+	if strings.HasPrefix(gitURL, "git@") {
 		// Split on the first colon to separate host from path
-		parts := strings.SplitN(url, ":", 2)
+		parts := strings.SplitN(gitURL, ":", 2)
 		if len(parts) == 2 {
 			// Replace git@ with https://
-			host := strings.Replace(parts[0], "git@", "https://", 1)
-			path := parts[1]
-			// Remove .git suffix if present
-			path = strings.TrimSuffix(path, ".git")
-			url = host + "/" + path
+			host := strings.Replace(parts[0], "git@", "", 1)
+			path := strings.TrimSuffix(parts[1], ".git")
+
+			// SECURITY: Properly construct URL using net/url
+			u := &url.URL{
+				Scheme: "https",
+				Host:   host,
+				Path:   "/" + path,
+			}
+			return u.String()
 		}
-	} else if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") {
-		// Already an HTTP(S) URL, just remove .git suffix if present
-		url = strings.TrimSuffix(url, ".git")
-	} else if strings.HasPrefix(url, "ssh://") {
-		// Handle ssh:// URLs (ssh://git@github.com/user/repo.git)
-		url = strings.Replace(url, "ssh://git@", "https://", 1)
-		url = strings.Replace(url, "ssh://", "https://", 1)
-		url = strings.TrimSuffix(url, ".git")
+	} else if strings.HasPrefix(gitURL, "https://") || strings.HasPrefix(gitURL, "http://") {
+		// SECURITY: Parse and validate HTTP(S) URLs
+		parsedURL, err := url.Parse(gitURL)
+		if err != nil {
+			// Fallback to simple string manipulation if parsing fails
+			return strings.TrimSuffix(gitURL, ".git")
+		}
+		// Remove .git suffix from path
+		parsedURL.Path = strings.TrimSuffix(parsedURL.Path, ".git")
+		return parsedURL.String()
+	} else if strings.HasPrefix(gitURL, "ssh://") {
+		// SECURITY: Properly parse SSH URLs
+		parsedURL, err := url.Parse(gitURL)
+		if err != nil {
+			// Fallback to simple string manipulation
+			gitURL = strings.Replace(gitURL, "ssh://git@", "https://", 1)
+			gitURL = strings.Replace(gitURL, "ssh://", "https://", 1)
+			return strings.TrimSuffix(gitURL, ".git")
+		}
+
+		// Convert ssh:// to https://
+		parsedURL.Scheme = "https"
+		// Remove username (git@) from host
+		if parsedURL.User != nil {
+			parsedURL.User = nil
+		}
+		// Remove .git suffix
+		parsedURL.Path = strings.TrimSuffix(parsedURL.Path, ".git")
+		return parsedURL.String()
 	}
 
-	return url
+	return gitURL
 }
 
 // TranslateGit2UrlWithPage converts a Git URL to an HTTP(S) URL with optional page suffix
-func TranslateGit2UrlWithPage(url string, pageType PageType) string {
-	baseURL := TranslateGit2Url(url)
-	platform := DetectPlatform(url)
+func TranslateGit2UrlWithPage(gitURL string, pageType PageType) string {
+	baseURL := TranslateGit2Url(gitURL)
+	platform := DetectPlatform(gitURL)
 	pagePath := GetPagePath(platform, pageType)
-	return baseURL + pagePath
+
+	// SECURITY: Use proper URL joining instead of string concatenation
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		// Fallback to simple concatenation if parsing fails
+		return baseURL + pagePath
+	}
+
+	parsedURL.Path = parsedURL.Path + pagePath
+	return parsedURL.String()
 }

@@ -89,6 +89,7 @@ gitfab -t
 ```
 
 This will open:
+
 - GitHub: `/actions` page
 - GitLab: `/-/pipelines` page
 - Bitbucket: `/pipelines` page
