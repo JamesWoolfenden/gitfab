@@ -37,10 +37,14 @@ jobs:
 
       ## runs go test ./...
       - name: Build
+        env:
+          GOTOOLCHAIN: auto
         run: go build ./...
 
       ## runs go test ./...
       - name: Test
+        env:
+          GOTOOLCHAIN: auto
         run: go test ./... -coverprofile=./cover.out
 
       - name: Upload coverage reports to Codecov
