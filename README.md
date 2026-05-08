@@ -9,6 +9,7 @@ Opens a git repository in your default browser. Similar to `hub browse` but work
 - 🔄 **Multiple URL Formats** - Handles SSH, HTTPS, and ssh:// protocol URLs
 - 🎯 **Remote Selection** - Choose which remote to open (defaults to `origin`)
 - 🚀 **Pipeline Support** - Use `--target` flag to open Actions/Pipelines page (auto-detects platform)
+- 👀 **Watch CI Builds** - Use `--watch` to follow GitHub Actions runs live in your terminal
 - ⚡ **Fast & Lightweight** - Single binary with no dependencies
 
 ## Installation
@@ -53,6 +54,7 @@ gitfab [flags]
 - `--version` - Show version information
 - `--remote <name>` - Specify which remote to open (default: "origin")
 - `--target` or `-t` - Open pipeline/actions page (auto-detects based on platform)
+- `--watch` or `-w` - Watch running CI builds in the console (GitHub only)
 
 ### Examples
 
@@ -93,6 +95,36 @@ This will open:
 - GitHub: `/actions` page
 - GitLab: `/-/pipelines` page
 - Bitbucket: `/pipelines` page
+
+**Watch CI builds in the terminal:**
+
+```bash
+gitfab --watch
+# or use the shorthand
+gitfab -w
+```
+
+Polls GitHub Actions every 5 seconds and renders a live table of workflow runs (status, workflow, branch, event, age). Exits automatically once all in‑progress builds finish, or press `Ctrl+C` to stop.
+
+```text
+Watching JamesWoolfenden/gitfab — Ctrl+C to stop
+
+STATUS         WORKFLOW         BRANCH        EVENT         AGE  ID
+● in_progress  CI               feat/watch    push          12s  9123456789
+● queued       CodeQL           feat/watch    push          12s  9123456790
+✓ success      CI               main          push          3m   9123456712
+✗ failure      goreleaser       v0.1.0        push          1h   9123455100
+- cancelled    CI               chore/deps    pull_request  2h   9123454001
+
+Updated 09:41:07
+```
+
+Set `GITHUB_TOKEN` to authenticate — without it you are limited to public repos and the unauthenticated GitHub API rate limit:
+
+```bash
+export GITHUB_TOKEN=ghp_xxx
+gitfab -w
+```
 
 ## How It Works
 
