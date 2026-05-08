@@ -90,6 +90,7 @@ func WatchRuns(out io.Writer, owner, repo, token string, interval time.Duration)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	seenActive := false
 	for {
 		runs, err := fetchWorkflowRuns(ctx, owner, repo, token)
 		if err != nil {
@@ -100,6 +101,19 @@ func WatchRuns(out io.Writer, owner, repo, token string, interval time.Duration)
 			return err
 		}
 		renderRuns(out, owner, repo, token, runs)
+
+		active := 0
+		for _, r := range runs {
+			if isActive(r.Status) {
+				active++
+			}
+		}
+		if active > 0 {
+			seenActive = true
+		} else if seenActive {
+			fmt.Fprintln(out, "\nAll builds finished.")
+			return nil
+		}
 
 		select {
 		case <-ctx.Done():
