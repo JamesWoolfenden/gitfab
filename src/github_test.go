@@ -38,6 +38,24 @@ func TestParseOwnerRepo(t *testing.T) {
 	}
 }
 
+func TestPlainStatus(t *testing.T) {
+	cases := []struct {
+		r    WorkflowRun
+		want string
+	}{
+		{WorkflowRun{Status: "in_progress"}, "* in_progress"},
+		{WorkflowRun{Status: "queued"}, "* queued"},
+		{WorkflowRun{Status: "completed", Conclusion: "success"}, "success"},
+		{WorkflowRun{Status: "completed", Conclusion: "failure"}, "failure"},
+		{WorkflowRun{Status: "completed", Conclusion: ""}, "- completed"},
+	}
+	for _, tc := range cases {
+		if got := plainStatus(tc.r); got != tc.want {
+			t.Errorf("plainStatus(%+v) = %q, want %q", tc.r, got, tc.want)
+		}
+	}
+}
+
 func TestHumanAge(t *testing.T) {
 	cases := []struct {
 		d    time.Duration
