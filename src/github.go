@@ -52,8 +52,11 @@ type workflowRunsResponse struct {
 	WorkflowRuns []WorkflowRun `json:"workflow_runs"`
 }
 
-func fetchWorkflowRuns(ctx context.Context, owner, repo, token string) ([]WorkflowRun, error) {
+func fetchWorkflowRuns(ctx context.Context, owner, repo, token, branch string) ([]WorkflowRun, error) {
 	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/runs?per_page=20", url.PathEscape(owner), url.PathEscape(repo))
+	if branch != "" {
+		endpoint += "&branch=" + url.QueryEscape(branch)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -82,8 +85,119 @@ func fetchWorkflowRuns(ctx context.Context, owner, repo, token string) ([]Workfl
 	return out.WorkflowRuns, nil
 }
 
+// ListRuns fetches workflow runs once and writes them to out, then returns.
+// With asJSON it emits the raw run objects; otherwise a plain table with no
+// ANSI escapes, suitable for piping/grep.
+func ListRuns(out io.Writer, owner, repo, token, branch string, asJSON bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	runs, err := fetchWorkflowRuns(ctx, owner, repo, token, branch)
+	if err != nil {
+		return err
+	}
+	return writeRuns(out, runs, asJSON)
+}
+
+// WaitRuns polls until all runs that were active during the wait have
+// completed, prints a final summary, and reports whether they all passed.
+// If no active run appears within a short grace window it exits early.
+func WaitRuns(out io.Writer, owner, repo, token, branch string, interval time.Duration, asJSON bool) (allPassed bool, err error) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	const graceTicks = 6
+	watched := map[int64]bool{}
+	idle := 0
+	var runs []WorkflowRun
+
+	for {
+		runs, err = fetchWorkflowRuns(ctx, owner, repo, token, branch)
+		if err != nil {
+			if ctx.Err() != nil {
+				return false, nil
+			}
+			return false, err
+		}
+
+		active := 0
+		for _, r := range runs {
+			if isActive(r.Status) {
+				active++
+				watched[r.ID] = true
+			}
+		}
+
+		if active == 0 {
+			if len(watched) > 0 {
+				break
+			}
+			idle++
+			if idle >= graceTicks {
+				fmt.Fprintln(out, "no active runs appeared")
+				return true, writeRuns(out, runs, asJSON)
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return false, nil
+		case <-ticker.C:
+		}
+	}
+
+	failed := 0
+	for _, r := range runs {
+		if !watched[r.ID] {
+			continue
+		}
+		switch r.Conclusion {
+		case "failure", "timed_out", "cancelled", "startup_failure":
+			failed++
+		}
+	}
+	if err := writeRuns(out, runs, asJSON); err != nil {
+		return failed == 0, err
+	}
+	if failed > 0 {
+		fmt.Fprintf(out, "\n%d watched run(s) failed\n", failed)
+		return false, nil
+	}
+	fmt.Fprintf(out, "\nall %d watched run(s) passed\n", len(watched))
+	return true, nil
+}
+
+func writeRuns(out io.Writer, runs []WorkflowRun, asJSON bool) error {
+	if asJSON {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(runs)
+	}
+	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "STATUS\tWORKFLOW\tBRANCH\tEVENT\tAGE\tID")
+	for _, r := range runs {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\n",
+			plainStatus(r), r.Name, r.HeadBranch, r.Event,
+			humanAge(time.Since(r.CreatedAt)), r.ID)
+	}
+	return tw.Flush()
+}
+
+func plainStatus(r WorkflowRun) string {
+	if isActive(r.Status) {
+		return "* " + r.Status
+	}
+	if r.Conclusion == "" {
+		return "- " + r.Status
+	}
+	return r.Conclusion
+}
+
 // WatchRuns polls GitHub Actions workflow runs and renders them until interrupted.
-func WatchRuns(out io.Writer, owner, repo, token string, interval time.Duration) error {
+func WatchRuns(out io.Writer, owner, repo, token, branch string, interval time.Duration) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -92,7 +206,7 @@ func WatchRuns(out io.Writer, owner, repo, token string, interval time.Duration)
 
 	seenActive := false
 	for {
-		runs, err := fetchWorkflowRuns(ctx, owner, repo, token)
+		runs, err := fetchWorkflowRuns(ctx, owner, repo, token, branch)
 		if err != nil {
 			if ctx.Err() != nil {
 				fmt.Fprintln(out)

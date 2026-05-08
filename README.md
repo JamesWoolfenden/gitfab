@@ -55,6 +55,10 @@ gitfab [flags]
 - `--remote <name>` - Specify which remote to open (default: "origin")
 - `--target` or `-t` - Open pipeline/actions page (auto-detects based on platform)
 - `--watch` or `-w` - Watch running CI builds in the console (GitHub only)
+- `--once` or `-1` - Print CI build status once as a plain table and exit (GitHub only)
+- `--wait` - Block until active CI runs finish, print result, exit non‑zero on failure (GitHub only)
+- `--json` - Emit CI build status as JSON instead of a table (with `--once` or `--wait`)
+- `--branch <name>` - Filter `--watch`/`--once`/`--wait` to runs on a single branch
 
 ### Examples
 
@@ -125,6 +129,24 @@ Set `GITHUB_TOKEN` to authenticate — without it you are limited to public repo
 export GITHUB_TOKEN=ghp_xxx
 gitfab -w
 ```
+
+**One‑shot status (script/pipe friendly):**
+
+```bash
+gitfab --once                 # plain table, no ANSI escapes
+gitfab -1 --branch feat/foo   # only runs on feat/foo
+gitfab --json | jq '.[0]'     # machine‑readable
+```
+
+**Wait for CI to finish:**
+
+```bash
+git push
+gitfab --wait --branch "$(git rev-parse --abbrev-ref HEAD)"
+echo "exit=$?"   # 0 if all watched runs passed, 1 otherwise
+```
+
+`--wait` polls until every run that was active during the wait has completed, prints a final table (or JSON with `--json`), and exits non‑zero if any of them failed, timed out, or was cancelled. Handy in shell scripts or as a background task in your editor/agent.
 
 ## How It Works
 
