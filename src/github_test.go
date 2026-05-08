@@ -1,0 +1,56 @@
+package gitfab
+
+import (
+	"testing"
+	"time"
+)
+
+func TestParseOwnerRepo(t *testing.T) {
+	cases := []struct {
+		in          string
+		wantOwner   string
+		wantRepo    string
+		wantErr     bool
+		description string
+	}{
+		{"git@github.com:JamesWoolfenden/gitfab.git", "JamesWoolfenden", "gitfab", false, "ssh shorthand"},
+		{"https://github.com/JamesWoolfenden/gitfab.git", "JamesWoolfenden", "gitfab", false, "https"},
+		{"https://github.com/JamesWoolfenden/gitfab", "JamesWoolfenden", "gitfab", false, "https no .git"},
+		{"ssh://git@github.com/JamesWoolfenden/gitfab", "JamesWoolfenden", "gitfab", false, "ssh url"},
+		{"https://github.com/", "", "", true, "no path"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			owner, repo, err := ParseOwnerRepo(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got owner=%q repo=%q", owner, repo)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if owner != tc.wantOwner || repo != tc.wantRepo {
+				t.Errorf("got %s/%s, want %s/%s", owner, repo, tc.wantOwner, tc.wantRepo)
+			}
+		})
+	}
+}
+
+func TestHumanAge(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{45 * time.Second, "45s"},
+		{3 * time.Minute, "3m"},
+		{2 * time.Hour, "2h"},
+		{49 * time.Hour, "2d"},
+	}
+	for _, tc := range cases {
+		if got := humanAge(tc.d); got != tc.want {
+			t.Errorf("humanAge(%v) = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}

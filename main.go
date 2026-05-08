@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 )
@@ -24,6 +25,8 @@ func main() {
 		remoteName    = flag.String("remote", "origin", "Name of the remote to open")
 		openPipeline  = flag.Bool("target", false, "Open pipeline/actions page (auto-detects based on platform)")
 		openPipelineT = flag.Bool("t", false, "Shorthand for -target")
+		watch         = flag.Bool("watch", false, "Watch running CI builds in the console (GitHub only)")
+		watchW        = flag.Bool("w", false, "Shorthand for -watch")
 	)
 
 	flag.Parse()
@@ -36,7 +39,7 @@ func main() {
 
 	// Handle help flag
 	if *showHelp {
-		fmt.Println("gitfab - Opens a git repository in a browser")
+		fmt.Println("gitfab - Opens a git repository in a browser, or watches its CI builds")
 		fmt.Println("\nUsage:")
 		fmt.Println("  gitfab [flags]")
 		fmt.Println("\nFlags:")
@@ -77,6 +80,21 @@ func main() {
 	}
 
 	remoteURL := remote.URLs[0]
+
+	if *watch || *watchW {
+		if gitfab.DetectPlatform(remoteURL) != gitfab.PlatformGitHub {
+			log.Fatalf("-watch currently only supports GitHub repositories")
+		}
+		owner, repoName, err := gitfab.ParseOwnerRepo(remoteURL)
+		if err != nil {
+			log.Fatalf("Failed to parse owner/repo from remote: %v", err)
+		}
+		token := os.Getenv("GITHUB_TOKEN")
+		if err := gitfab.WatchRuns(os.Stdout, owner, repoName, token, 5*time.Second); err != nil {
+			log.Fatalf("watch failed: %v", err)
+		}
+		return
+	}
 
 	// Determine which page to open
 	var page gitfab.PageType
