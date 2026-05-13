@@ -31,7 +31,10 @@ func main() {
 		once1         = flag.Bool("1", false, "Shorthand for -once")
 		asJSON        = flag.Bool("json", false, "Print CI build status as JSON instead of a table (with -once or -wait)")
 		wait          = flag.Bool("wait", false, "Block until active CI runs finish, print result, exit non-zero on failure (GitHub only)")
-		branch        = flag.String("branch", "", "Filter -watch/-once/-wait to runs on this branch")
+		fail          = flag.Bool("fail", false, "Show the log tail of the most recent failed CI run (GitHub only)")
+		failF         = flag.Bool("f", false, "Shorthand for -fail")
+		failTail      = flag.Int("tail", 60, "Number of log lines to show per failed job with -fail")
+		branch        = flag.String("branch", "", "Filter -watch/-once/-wait/-fail to runs on this branch")
 	)
 
 	flag.Parse()
@@ -86,9 +89,9 @@ func main() {
 
 	remoteURL := remote.URLs[0]
 
-	if *watch || *watchW || *once || *once1 || *asJSON || *wait {
+	if *watch || *watchW || *once || *once1 || *asJSON || *wait || *fail || *failF {
 		if gitfab.DetectPlatform(remoteURL) != gitfab.PlatformGitHub {
-			log.Fatalf("-watch/-once/-wait currently only support GitHub repositories")
+			log.Fatalf("-watch/-once/-wait/-fail currently only support GitHub repositories")
 		}
 		owner, repoName, err := gitfab.ParseOwnerRepo(remoteURL)
 		if err != nil {
@@ -97,6 +100,10 @@ func main() {
 		token := os.Getenv("GITHUB_TOKEN")
 
 		switch {
+		case *fail || *failF:
+			if err := gitfab.ExplainFailure(os.Stdout, owner, repoName, token, *branch, *failTail); err != nil {
+				log.Fatalf("fail report failed: %v", err)
+			}
 		case *wait:
 			ok, err := gitfab.WaitRuns(os.Stdout, owner, repoName, token, *branch, 5*time.Second, *asJSON)
 			if err != nil {

@@ -37,6 +37,28 @@ func ParseOwnerRepo(remoteURL string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
+func ghGet(ctx context.Context, endpoint, token string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "gitfab")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		resp.Body.Close()
+		return nil, fmt.Errorf("github api %s %s: %s", endpoint, resp.Status, strings.TrimSpace(string(body)))
+	}
+	return resp, nil
+}
+
 type WorkflowRun struct {
 	ID         int64     `json:"id"`
 	Name       string    `json:"name"`
@@ -318,4 +340,112 @@ func renderRuns(out io.Writer, owner, repo, token string, runs []WorkflowRun) {
 		fmt.Fprint(out, "  "+colDim+"(no GITHUB_TOKEN — public repos only, low rate limit)"+colReset)
 	}
 	fmt.Fprintln(out)
+}
+
+type jobStep struct {
+	Name       string `json:"name"`
+	Conclusion string `json:"conclusion"`
+}
+
+type job struct {
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	Conclusion string    `json:"conclusion"`
+	HTMLURL    string    `json:"html_url"`
+	Steps      []jobStep `json:"steps"`
+}
+
+type jobsResponse struct {
+	Jobs []job `json:"jobs"`
+}
+
+// ExplainFailure finds the most recent failed workflow run (optionally on a
+// branch) and prints the failing job, step and the tail of its log.
+func ExplainFailure(out io.Writer, owner, repo, token, branch string, tail int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	runs, err := fetchWorkflowRuns(ctx, owner, repo, token, branch)
+	if err != nil {
+		return err
+	}
+	var failed *WorkflowRun
+	for i, r := range runs {
+		if r.Status == "completed" && r.Conclusion != "success" && r.Conclusion != "skipped" && r.Conclusion != "" {
+			failed = &runs[i]
+			break
+		}
+	}
+	if failed == nil {
+		fmt.Fprintln(out, "No failed runs found in the last 20.")
+		return nil
+	}
+
+	fmt.Fprintf(out, "%s✗ %s%s  %s  (%s, %s ago)\n", colRed, failed.Name, colReset, failed.HeadBranch, failed.Conclusion, humanAge(time.Since(failed.CreatedAt)))
+	fmt.Fprintf(out, "  %s%s%s\n\n", colDim, failed.HTMLURL, colReset)
+
+	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/runs/%d/jobs?per_page=50", url.PathEscape(owner), url.PathEscape(repo), failed.ID)
+	resp, err := ghGet(ctx, endpoint, token)
+	if err != nil {
+		return err
+	}
+	var jr jobsResponse
+	err = json.NewDecoder(resp.Body).Decode(&jr)
+	resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("decode jobs: %w", err)
+	}
+
+	shown := 0
+	for _, j := range jr.Jobs {
+		if j.Conclusion == "success" || j.Conclusion == "skipped" {
+			continue
+		}
+		shown++
+		fmt.Fprintf(out, "%sJob:%s %s  →  %s%s%s\n", colYellow, colReset, j.Name, colDim, j.HTMLURL, colReset)
+		for _, s := range j.Steps {
+			if s.Conclusion != "success" && s.Conclusion != "skipped" && s.Conclusion != "" {
+				fmt.Fprintf(out, "%sStep:%s %s (%s)\n", colYellow, colReset, s.Name, s.Conclusion)
+			}
+		}
+		if err := printJobLogTail(ctx, out, owner, repo, token, j.ID, tail); err != nil {
+			fmt.Fprintf(out, "  %scould not fetch log: %v%s\n", colDim, err, colReset)
+		}
+		fmt.Fprintln(out)
+	}
+	if shown == 0 {
+		fmt.Fprintln(out, "  (no failed jobs reported — run may have been cancelled before jobs started)")
+	}
+	return nil
+}
+
+func printJobLogTail(ctx context.Context, out io.Writer, owner, repo, token string, jobID int64, tail int) error {
+	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/jobs/%d/logs", url.PathEscape(owner), url.PathEscape(repo), jobID)
+	resp, err := ghGet(ctx, endpoint, token)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
+	if tail > 0 && len(lines) > tail {
+		lines = lines[len(lines)-tail:]
+		fmt.Fprintf(out, "  %s... (last %d lines)%s\n", colDim, tail, colReset)
+	}
+	for _, l := range lines {
+		fmt.Fprintf(out, "  %s\n", stripLogTimestamp(l))
+	}
+	return nil
+}
+
+func stripLogTimestamp(l string) string {
+	if len(l) > 28 && l[4] == '-' && l[7] == '-' && l[10] == 'T' {
+		if sp := strings.IndexByte(l, ' '); sp > 20 && sp < 40 {
+			return l[sp+1:]
+		}
+	}
+	return l
 }
