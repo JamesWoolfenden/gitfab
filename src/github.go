@@ -20,7 +20,7 @@ const (
 	colGreen  = "\033[32m"
 	colRed    = "\033[31m"
 	colDim    = "\033[90m"
-	clearScr  = "\033[H\033[2J"
+	clearScr  = "\033[H\033[J"
 )
 
 // ParseOwnerRepo extracts the <owner>/<repo> pair from a git remote URL.
@@ -204,7 +204,6 @@ func WatchRuns(out io.Writer, owner, repo, token, branch string, interval time.D
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	seenActive := false
 	for {
 		runs, err := fetchWorkflowRuns(ctx, owner, repo, token, branch)
 		if err != nil {
@@ -222,10 +221,8 @@ func WatchRuns(out io.Writer, owner, repo, token, branch string, interval time.D
 				active++
 			}
 		}
-		if active > 0 {
-			seenActive = true
-		} else if seenActive {
-			fmt.Fprintln(out, "\nAll builds finished.")
+		if active == 0 {
+			fmt.Fprintln(out, "\nNo builds running.")
 			return nil
 		}
 
