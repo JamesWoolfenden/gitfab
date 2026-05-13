@@ -13,10 +13,11 @@ before:
     - go mod tidy
     # you may remove this if you don't need go generate
     - go generate ./...
-    - ./set-version.sh
 
 builds:
-  - goos:
+  - ldflags:
+      - -s -w -X gitfab/src.Version={{.Version}}
+    goos:
       - darwin
       - linux
       - windows

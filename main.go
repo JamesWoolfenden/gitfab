@@ -15,8 +15,6 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
-const version = "0.1.0"
-
 func main() {
 	// Define CLI flags
 	var (
@@ -41,7 +39,7 @@ func main() {
 
 	// Handle version flag
 	if *showVersion {
-		fmt.Printf("gitfab version %s\n", version)
+		fmt.Printf("gitfab version %s\n", gitfab.Version)
 		os.Exit(0)
 	}
 
