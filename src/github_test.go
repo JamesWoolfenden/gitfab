@@ -56,6 +56,23 @@ func TestPlainStatus(t *testing.T) {
 	}
 }
 
+func TestStripLogTimestamp(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"2026-05-13T10:24:33.9087072Z ##[error]boom", "##[error]boom"},
+		{"2026-05-13T10:24:33.0000000Z plain", "plain"},
+		{"no timestamp here", "no timestamp here"},
+		{"", ""},
+		{"2026-05-13", "2026-05-13"},
+	}
+	for _, tc := range cases {
+		if got := stripLogTimestamp(tc.in); got != tc.want {
+			t.Errorf("stripLogTimestamp(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestHumanAge(t *testing.T) {
 	cases := []struct {
 		d    time.Duration
