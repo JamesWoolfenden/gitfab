@@ -204,6 +204,10 @@ func WatchRuns(out io.Writer, owner, repo, token, branch string, interval time.D
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	const grace = 10 * time.Second
+	graceUntil := time.Now().Add(grace)
+	seenActive := false
+
 	for {
 		runs, err := fetchWorkflowRuns(ctx, owner, repo, token, branch)
 		if err != nil {
@@ -221,9 +225,16 @@ func WatchRuns(out io.Writer, owner, repo, token, branch string, interval time.D
 				active++
 			}
 		}
-		if active == 0 {
+		if active > 0 {
+			seenActive = true
+		} else if seenActive {
+			fmt.Fprintln(out, "\nAll builds finished.")
+			return nil
+		} else if time.Now().After(graceUntil) {
 			fmt.Fprintln(out, "\nNo builds running.")
 			return nil
+		} else {
+			fmt.Fprintln(out, colDim+"\n  waiting for builds to start..."+colReset)
 		}
 
 		select {
