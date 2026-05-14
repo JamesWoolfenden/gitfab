@@ -58,7 +58,9 @@ gitfab [flags]
 - `--once` or `-1` - Print CI build status once as a plain table and exit (GitHub only)
 - `--wait` - Block until active CI runs finish, print result, exit non‑zero on failure (GitHub only)
 - `--json` - Emit CI build status as JSON instead of a table (with `--once` or `--wait`)
-- `--branch <name>` - Filter `--watch`/`--once`/`--wait` to runs on a single branch
+- `--fail` or `-f` - Show the failing job, step and log tail of the most recent failed run (GitHub only)
+- `--tail <n>` - Number of log lines to show per failed job with `--fail` (default 60)
+- `--branch <name>` - Filter `--watch`/`--once`/`--wait`/`--fail` to runs on a single branch
 
 ### Examples
 
@@ -147,6 +149,15 @@ echo "exit=$?"   # 0 if all watched runs passed, 1 otherwise
 ```
 
 `--wait` polls until every run that was active during the wait has completed, prints a final table (or JSON with `--json`), and exits non‑zero if any of them failed, timed out, or was cancelled. Handy in shell scripts or as a background task in your editor/agent.
+
+**Explain a failure:**
+
+```bash
+gitfab --fail                       # most recent failed run, last 60 log lines
+gitfab -f --branch main --tail 200  # scope to a branch, more context
+```
+
+`--fail` finds the most recent non‑success run, lists each failed job and step, and prints the tail of the job log so you can see the error without leaving the terminal.
 
 ## How It Works
 

@@ -2,3 +2,4 @@
 gitfab
 gitfab.exe
 *.orig
+dist/
