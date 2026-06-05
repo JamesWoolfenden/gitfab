@@ -23,13 +23,13 @@ func main() {
 		remoteName    = flag.String("remote", "origin", "Name of the remote to open")
 		openPipeline  = flag.Bool("target", false, "Open pipeline/actions page (auto-detects based on platform)")
 		openPipelineT = flag.Bool("t", false, "Shorthand for -target")
-		watch         = flag.Bool("watch", false, "Watch running CI builds in the console (GitHub only)")
+		watch         = flag.Bool("watch", false, "Watch running CI builds in the console (GitHub/GitLab)")
 		watchW        = flag.Bool("w", false, "Shorthand for -watch")
-		once          = flag.Bool("once", false, "Print CI build status once as a plain table and exit (GitHub only)")
+		once          = flag.Bool("once", false, "Print CI build status once as a plain table and exit (GitHub/GitLab)")
 		once1         = flag.Bool("1", false, "Shorthand for -once")
 		asJSON        = flag.Bool("json", false, "Print CI build status as JSON instead of a table (with -once or -wait)")
-		wait          = flag.Bool("wait", false, "Block until active CI runs finish, print result, exit non-zero on failure (GitHub only)")
-		fail          = flag.Bool("fail", false, "Show the log tail of the most recent failed CI run (GitHub only)")
+		wait          = flag.Bool("wait", false, "Block until active CI runs finish, print result, exit non-zero on failure (GitHub/GitLab)")
+		fail          = flag.Bool("fail", false, "Show the log tail of the most recent failed CI run (GitHub/GitLab)")
 		failF         = flag.Bool("f", false, "Shorthand for -fail")
 		failTail      = flag.Int("tail", 60, "Number of log lines to show per failed job with -fail")
 		branch        = flag.String("branch", "", "Filter -watch/-once/-wait/-fail to runs on this branch")
@@ -88,36 +88,67 @@ func main() {
 	remoteURL := remote.URLs[0]
 
 	if *watch || *watchW || *once || *once1 || *asJSON || *wait || *fail || *failF {
-		if gitfab.DetectPlatform(remoteURL) != gitfab.PlatformGitHub {
-			log.Fatalf("-watch/-once/-wait/-fail currently only support GitHub repositories")
-		}
-		owner, repoName, err := gitfab.ParseOwnerRepo(remoteURL)
-		if err != nil {
-			log.Fatalf("Failed to parse owner/repo from remote: %v", err)
-		}
-		token := os.Getenv("GITHUB_TOKEN")
-
-		switch {
-		case *fail || *failF:
-			if err := gitfab.ExplainFailure(os.Stdout, owner, repoName, token, *branch, *failTail); err != nil {
-				log.Fatalf("fail report failed: %v", err)
-			}
-		case *wait:
-			ok, err := gitfab.WaitRuns(os.Stdout, owner, repoName, token, *branch, 5*time.Second, *asJSON)
+		switch gitfab.DetectPlatform(remoteURL) {
+		case gitfab.PlatformGitHub:
+			owner, repoName, err := gitfab.ParseOwnerRepo(remoteURL)
 			if err != nil {
-				log.Fatalf("wait failed: %v", err)
+				log.Fatalf("Failed to parse owner/repo from remote: %v", err)
 			}
-			if !ok {
-				os.Exit(1)
+			token := os.Getenv("GITHUB_TOKEN")
+			switch {
+			case *fail || *failF:
+				if err := gitfab.ExplainFailure(os.Stdout, owner, repoName, token, *branch, *failTail); err != nil {
+					log.Fatalf("fail report failed: %v", err)
+				}
+			case *wait:
+				ok, err := gitfab.WaitRuns(os.Stdout, owner, repoName, token, *branch, 5*time.Second, *asJSON)
+				if err != nil {
+					log.Fatalf("wait failed: %v", err)
+				}
+				if !ok {
+					os.Exit(1)
+				}
+			case *once || *once1 || *asJSON:
+				if err := gitfab.ListRuns(os.Stdout, owner, repoName, token, *branch, *asJSON); err != nil {
+					log.Fatalf("list failed: %v", err)
+				}
+			default:
+				if err := gitfab.WatchRuns(os.Stdout, owner, repoName, token, *branch, 5*time.Second); err != nil {
+					log.Fatalf("watch failed: %v", err)
+				}
 			}
-		case *once || *once1 || *asJSON:
-			if err := gitfab.ListRuns(os.Stdout, owner, repoName, token, *branch, *asJSON); err != nil {
-				log.Fatalf("list failed: %v", err)
+
+		case gitfab.PlatformGitLab:
+			host, projectPath, err := gitfab.ParseGitLabProject(remoteURL)
+			if err != nil {
+				log.Fatalf("Failed to parse project path from remote: %v", err)
 			}
+			token := os.Getenv("GITLAB_TOKEN")
+			switch {
+			case *fail || *failF:
+				if err := gitfab.ExplainPipelineFailure(os.Stdout, host, projectPath, token, *branch, *failTail); err != nil {
+					log.Fatalf("fail report failed: %v", err)
+				}
+			case *wait:
+				ok, err := gitfab.WaitPipelines(os.Stdout, host, projectPath, token, *branch, 5*time.Second, *asJSON)
+				if err != nil {
+					log.Fatalf("wait failed: %v", err)
+				}
+				if !ok {
+					os.Exit(1)
+				}
+			case *once || *once1 || *asJSON:
+				if err := gitfab.ListPipelines(os.Stdout, host, projectPath, token, *branch, *asJSON); err != nil {
+					log.Fatalf("list failed: %v", err)
+				}
+			default:
+				if err := gitfab.WatchPipelines(os.Stdout, host, projectPath, token, *branch, 5*time.Second); err != nil {
+					log.Fatalf("watch failed: %v", err)
+				}
+			}
+
 		default:
-			if err := gitfab.WatchRuns(os.Stdout, owner, repoName, token, *branch, 5*time.Second); err != nil {
-				log.Fatalf("watch failed: %v", err)
-			}
+			log.Fatalf("-watch/-once/-wait/-fail only support GitHub and GitLab repositories")
 		}
 		return
 	}
